@@ -10,7 +10,10 @@
     "start": "node src/index.js",
     "cli": "node bin/finenet-auth.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "install:local": "bash scripts/install-local.sh --no-start",
+    "install:service": "bash scripts/install-local.sh --service --no-start",
+    "uninstall:local": "bash scripts/uninstall-local.sh"
   },
   "engines": {
     "node": ">=18"

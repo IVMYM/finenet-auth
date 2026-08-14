@@ -13,9 +13,41 @@
 
 > 已授权 ≠ 登录令牌。UDP 为 fire-and-forget；UI 只根据 `spacheck.json` 可达性判定。
 
-## 快速开始
+## 本地部署
+
+前置：本机已装 **Node.js ≥ 18**。
 
 ```bash
+git clone https://github.com/IVMYM/finenet-auth.git
+cd finenet-auth
+# 若用本 PR 分支：
+# git checkout cursor/finenet-auth-miniapp-5029
+
+bash scripts/install-local.sh
+# 浏览器打开 http://127.0.0.1:3927
+```
+
+只安装、不立刻启动：
+
+```bash
+npm run install:local
+finenet-auth          # 启动 UI
+finenet-auth status   # 探测 已授权/未授权
+```
+
+Linux 开机自启（systemd 用户服务）：
+
+```bash
+npm run install:service
+systemctl --user status finenet-auth
+# 卸载：npm run uninstall:local
+```
+
+Windows（PowerShell）：
+
+```powershell
+git clone https://github.com/IVMYM/finenet-auth.git
+cd finenet-auth
 npm install
 npm start
 # 浏览器打开 http://127.0.0.1:3927
@@ -24,11 +56,11 @@ npm start
 CLI：
 
 ```bash
-node bin/finenet-auth.js set-profile --user 10086 --name 张三
-node bin/finenet-auth.js set-key --key "$(cat wecom.pem)"
-node bin/finenet-auth.js apply
-node bin/finenet-auth.js authorize
-node bin/finenet-auth.js status
+finenet-auth set-profile --user 10086 --name 张三
+finenet-auth set-key --key "$(cat wecom.pem)"
+finenet-auth apply
+finenet-auth authorize
+finenet-auth status
 ```
 
 本地数据：`~/.finenet-auth/keys.json`（按 userid 存公钥，对应原客户端 `tb_sqlite_cipher`）。
