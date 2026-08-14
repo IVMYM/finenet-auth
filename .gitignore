@@ -1,0 +1,9 @@
+node_modules/
+npm-debug.log*
+data/
+.DS_Store
+*.log
+.env
+.finenet-auth/
+coverage/
+dist/
