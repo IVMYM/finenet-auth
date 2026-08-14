@@ -3,7 +3,7 @@ import { DEFAULTS, fetchReturnTime } from "./config.js";
 import { getMachineId, getDeviceType } from "./machine.js";
 import { KeyStore } from "./store.js";
 import { normalizePublicKey } from "./crypto.js";
-import { applyKey, authorizeKnock, checkUdpPath } from "./knock.js";
+import { applyKey, authorizeKnock } from "./knock.js";
 import { checkStatus, diagnoseHosts } from "./probe.js";
 import { KeepAlive, ingestKeyReply } from "./keepalive.js";
 
@@ -20,6 +20,11 @@ export class SpaClient extends EventEmitter {
     this.state = null;
     this.hosts = null;
     this.lastKnock = null;
+    this._knockGuard = {
+      lastAt: 0,
+      failCount: 0,
+      cooldownUntil: 0,
+    };
     this.logs = [];
     this.keepAlive = new KeepAlive(this, {
       knockIntervalMs: this.config.knockIntervalMs,
@@ -131,10 +136,51 @@ export class SpaClient extends EventEmitter {
     });
 
     if (result.authorized) {
+      this._knockGuard.failCount = 0;
+      this._knockGuard.cooldownUntil = 0;
       if (!this.keepAlive.running) this.keepAlive.start();
       this.refreshTimers().catch(() => {});
+    } else if (this.keepAlive.running) {
+      // Never keep knocking while unauthorized
+      this.keepAlive.stop();
     }
     return result;
+  }
+
+  _assertCanKnock(kind) {
+    const now = Date.now();
+    const g = this._knockGuard;
+    if (g.cooldownUntil && now < g.cooldownUntil) {
+      const mins = Math.ceil((g.cooldownUntil - now) / 60_000);
+      throw new Error(
+        `敲门已冷却（疑似异常上报过多）。请等待约 ${mins} 分钟，或联系运维解封 IP 后再试。`
+      );
+    }
+    const gap = this.config.knockMinIntervalMs || 60_000;
+    if (g.lastAt && now - g.lastAt < gap && kind !== "force") {
+      const wait = Math.ceil((gap - (now - g.lastAt)) / 1000);
+      throw new Error(`敲门过于频繁，请 ${wait}s 后再试，避免触发「异常上报封堵」。`);
+    }
+  }
+
+  _noteKnockSent({ authorizedSoon } = {}) {
+    const g = this._knockGuard;
+    g.lastAt = Date.now();
+    if (authorizedSoon) {
+      g.failCount = 0;
+      g.cooldownUntil = 0;
+      return;
+    }
+    // Optimistic: count as attempt; probe later may clear
+    g.failCount += 1;
+    const limit = this.config.knockFailLimit || 5;
+    if (g.failCount >= limit) {
+      g.cooldownUntil = Date.now() + (this.config.knockCooldownMs || 30 * 60_000);
+      this._log("warn", "敲门失败次数过多，进入冷却", {
+        failCount: g.failCount,
+        cooldownUntil: g.cooldownUntil,
+      });
+    }
   }
 
   async diagnose() {
@@ -143,18 +189,12 @@ export class SpaClient extends EventEmitter {
       timeoutMs: this.config.probeTimeoutMs,
       hostChecks: this.config.hostChecks,
     });
-    const udp = await checkUdpPath({
-      host: this.config.udpHost,
-      port: this.config.udpPort,
-    });
-    diag.udp = udp;
-    if (!diag.authorized && udp?.sent) {
-      diag.advice.push(
-        "443 连不上 + UDP 能发出：敲门包可能未被网关接受（公钥过期/字段不匹配）或尚未生效，请重新 authorize 后等几秒再测 spacheck。"
+    // Do NOT UDP-ping on every diagnose — reduces 异常上报 noise.
+    diag.udp = null;
+    if (!diag.authorized) {
+      diag.advice.unshift(
+        "若企业微信提示 IP 被封堵（异常上报达上限）：立刻停止 authorize/apply，联系运维解封；继续敲门会加重封堵。"
       );
-    }
-    if (!diag.authorized && udp && !udp.sent) {
-      diag.advice.unshift("UDP 30982 发送失败 — 先解决本机 UDP/防火墙，否则永远无法敲门。");
     }
 
     this.hosts = diag.hosts;
@@ -165,20 +205,20 @@ export class SpaClient extends EventEmitter {
       checkedAt: diag.checkedAt,
       hosts: diag.hosts,
       advice: diag.advice,
-      udp,
     };
     this._log("info", "diagnose", {
       status: diag.status,
       git: diag.hosts.find((h) => h.name === "git")?.httpStatus,
-      udpSent: udp?.sent,
     });
     return diag;
   }
 
   /** Step 1 — 申请密钥 */
   async applyForKey() {
+    this._assertCanKnock("apply");
     const ctx = this._ctx();
     const result = await applyKey(ctx);
+    this._noteKnockSent();
     this.lastKnock = { type: "apply", at: Date.now(), result };
     this._log("info", "已发送申请密钥", { bytes: result.bytes, identification: "0" });
     return result;
@@ -186,11 +226,13 @@ export class SpaClient extends EventEmitter {
 
   /** Step 2 — 请求授权 (manual, identification "0") */
   async requestAuth() {
+    this._assertCanKnock("authorize");
     const ctx = this._ctx();
     if (!ctx.publicKey) {
       throw new Error("尚未保存公钥。请粘贴企业微信下发的 RSA 公钥后再请求授权。");
     }
     const result = await authorizeKnock(ctx, { identification: "0" });
+    this._noteKnockSent();
     this.lastKnock = { type: "authorize", at: Date.now(), result };
     if (result.skipped) {
       this._log("warn", "敲门已跳过", { reason: result.reason });
@@ -198,11 +240,11 @@ export class SpaClient extends EventEmitter {
       this._log("info", "已发送请求授权", { bytes: result.bytes, identification: "0" });
     }
     // Probe shortly after fire-and-forget knock
-    setTimeout(() => this.probe().catch(() => {}), 800);
+    setTimeout(() => this.probe().catch(() => {}), 1500);
     return result;
   }
 
-  /** Auto knock on launch when key already exists */
+  /** Auto knock on launch when key already exists — only if not cooling down */
   async autoKnockIfPossible() {
     const profile = this.store.getProfile();
     if (!profile?.userid) return { skipped: true, reason: "no profile" };
@@ -211,24 +253,31 @@ export class SpaClient extends EventEmitter {
 
     const probe = await this.probe();
     if (probe.authorized) {
+      this._knockGuard.failCount = 0;
       return { skipped: false, alreadyAuthorized: true, probe };
     }
 
-    const result = await this.silentKnock();
-    setTimeout(() => this.probe().catch(() => {}), 800);
-    return { skipped: false, result, probe };
+    // While unauthorized, do NOT auto UDP-knock on every launch (LaunchAgent 重启会刷爆上报).
+    this._log("warn", "未授权：跳过自动敲门，请手动 authorize（解封后）", {
+      failCount: this._knockGuard.failCount,
+    });
+    return { skipped: true, reason: "unauthorized-no-auto-knock", probe };
   }
 
   async silentKnock() {
+    this._assertCanKnock("silent");
     const ctx = this._ctx();
     const result = await authorizeKnock(ctx, { identification: "1" });
+    this._noteKnockSent();
     this.lastKnock = { type: "silent", at: Date.now(), result };
     return result;
   }
 
   async rotateKey() {
+    this._assertCanKnock("rotate");
     const ctx = this._ctx();
     const result = await authorizeKnock(ctx, { identification: "2", waitReplyMs: 2_500 });
+    this._noteKnockSent();
     this.lastKnock = { type: "rotate", at: Date.now(), result };
     if (result.reply) {
       const saved = ingestKeyReply(this.store, ctx.userid, result.reply);

@@ -20,9 +20,14 @@ export const DEFAULTS = {
   knockIntervalMs: 597_000,
   /** Key rotation (~21 min) */
   publicKeyIntervalMs: 1_266_000,
-  /** Offline back-off */
-  offlineRetryMs: 30_000,
-  offlineRetryMaxMs: 61_000,
+  /** Offline back-off (probe only — do NOT UDP-knock while unauthorized) */
+  offlineRetryMs: 60_000,
+  offlineRetryMaxMs: 300_000,
+  /** Min gap between manual/auto UDP knocks to avoid 异常上报封堵 */
+  knockMinIntervalMs: 60_000,
+  /** Max failed knocks before client refuses further UDP until cooldown */
+  knockFailLimit: 5,
+  knockCooldownMs: 30 * 60_000,
   /** Probe cadence while unauthorized */
   probeIntervalMs: 1_000,
   /** HTTP timeouts */

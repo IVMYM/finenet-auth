@@ -170,8 +170,8 @@ function renderLogs(logs) {
 
 function scheduleProbeLoop(authorized) {
   if (probeTimer) clearInterval(probeTimer);
-  // Unauthorized: retry every 1s (page). Authorized: slower refresh.
-  const ms = authorized ? 15_000 : 1_000;
+  // Unauthorized: slow poll (avoid hammering). Authorized: refresh TTL.
+  const ms = authorized ? 15_000 : 10_000;
   probeTimer = setInterval(() => {
     refresh(false).catch(() => {});
   }, ms);
