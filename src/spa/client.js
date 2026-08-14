@@ -3,7 +3,7 @@ import { DEFAULTS, fetchReturnTime } from "./config.js";
 import { getMachineId, getDeviceType } from "./machine.js";
 import { KeyStore } from "./store.js";
 import { normalizePublicKey } from "./crypto.js";
-import { applyKey, authorizeKnock } from "./knock.js";
+import { applyKey, authorizeKnock, checkUdpPath } from "./knock.js";
 import { checkStatus, diagnoseHosts } from "./probe.js";
 import { KeepAlive, ingestKeyReply } from "./keepalive.js";
 
@@ -143,6 +143,20 @@ export class SpaClient extends EventEmitter {
       timeoutMs: this.config.probeTimeoutMs,
       hostChecks: this.config.hostChecks,
     });
+    const udp = await checkUdpPath({
+      host: this.config.udpHost,
+      port: this.config.udpPort,
+    });
+    diag.udp = udp;
+    if (!diag.authorized && udp?.sent) {
+      diag.advice.push(
+        "443 连不上 + UDP 能发出：敲门包可能未被网关接受（公钥过期/字段不匹配）或尚未生效，请重新 authorize 后等几秒再测 spacheck。"
+      );
+    }
+    if (!diag.authorized && udp && !udp.sent) {
+      diag.advice.unshift("UDP 30982 发送失败 — 先解决本机 UDP/防火墙，否则永远无法敲门。");
+    }
+
     this.hosts = diag.hosts;
     this.state = {
       authorized: diag.authorized,
@@ -151,10 +165,12 @@ export class SpaClient extends EventEmitter {
       checkedAt: diag.checkedAt,
       hosts: diag.hosts,
       advice: diag.advice,
+      udp,
     };
     this._log("info", "diagnose", {
       status: diag.status,
       git: diag.hosts.find((h) => h.name === "git")?.httpStatus,
+      udpSent: udp?.sent,
     });
     return diag;
   }

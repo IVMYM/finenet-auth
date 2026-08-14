@@ -168,6 +168,91 @@ export async function authorizeKnock(ctx, { identification = "0", waitReplyMs = 
 }
 
 /**
+ * Best-effort UDP path check: send a tiny probe and optionally wait for any reply.
+ * SPA servers often stay silent — "sent" only means local send succeeded.
+ */
+export async function checkUdpPath({
+  host = DEFAULTS.udpHost,
+  port = DEFAULTS.udpPort,
+  waitReplyMs = 1500,
+} = {}) {
+  const started = Date.now();
+  const probe = Buffer.from(
+    JSON.stringify({ ping: 1, ts: Date.now(), client: "finenet-auth" }),
+    "utf8"
+  );
+
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket("udp4");
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      try {
+        socket.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(value);
+    };
+
+    socket.on("error", (err) => {
+      finish({
+        ok: false,
+        sent: false,
+        host,
+        port,
+        latencyMs: Date.now() - started,
+        error: err.message,
+        reply: null,
+        hint: "本机无法创建/发送 UDP — 检查网络权限或本地防火墙",
+      });
+    });
+
+    socket.on("message", (msg, rinfo) => {
+      finish({
+        ok: true,
+        sent: true,
+        host,
+        port,
+        latencyMs: Date.now() - started,
+        error: null,
+        reply: { text: msg.toString("utf8").slice(0, 200), from: `${rinfo.address}:${rinfo.port}` },
+        hint: "收到 UDP 回包（少见；说明路径通）",
+      });
+    });
+
+    socket.send(probe, port, host, (err) => {
+      if (err) {
+        finish({
+          ok: false,
+          sent: false,
+          host,
+          port,
+          latencyMs: Date.now() - started,
+          error: err.message,
+          reply: null,
+          hint: "UDP send 失败",
+        });
+        return;
+      }
+      setTimeout(() => {
+        finish({
+          ok: true,
+          sent: true,
+          host,
+          port,
+          latencyMs: Date.now() - started,
+          error: null,
+          reply: null,
+          hint: "UDP 已发出且无报错（SPA 常不回包；不能据此判定敲门已被接受）",
+        });
+      }, waitReplyMs);
+    });
+  });
+}
+
+/**
  * Parse a possible key-update UDP reply into a public key string.
  * Best-effort: JSON `{ publicKey|publickey|key|cipher }` or PEM body.
  */

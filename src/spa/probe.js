@@ -243,6 +243,12 @@ export async function diagnoseHosts({
 
   if (!authorized) {
     if (!fakeIpHit) {
+      const connFail = hosts.some((h) => !h.httpStatus && h.error);
+      if (connFail) {
+        advice.push(
+          "443 连接失败（Couldn't connect）= SPA 默认拒绝，白名单未打开。这比 403 更“隐形”。"
+        );
+      }
       advice.push("spacheck.json 不是 200 → 本机公网 IP 尚未进入 SPA 白名单。");
       advice.push("请先：finenet-auth authorize，等 2–3 秒再 diagnose；UDP 30982 必须直连可达。");
       if (service403.length) {

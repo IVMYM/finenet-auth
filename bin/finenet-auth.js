@@ -77,6 +77,11 @@ async function main() {
         `- ${h.name.padEnd(9)} HTTP ${h.httpStatus || "—"}  dns=${h.dns || "—"}  public=${h.publicDns || "—"}  ${h.hint || h.error || ""}`
       );
     }
+    if (diag.udp) {
+      console.log(
+        `- udp       ${diag.udp.host}:${diag.udp.port}  sent=${diag.udp.sent}  ${diag.udp.hint || diag.udp.error || ""}`
+      );
+    }
     if (diag.advice?.length) {
       console.log("\n建议:");
       for (const line of diag.advice) console.log(`  • ${line}`);

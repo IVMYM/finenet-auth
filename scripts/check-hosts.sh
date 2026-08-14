@@ -24,7 +24,11 @@ do
 done
 
 echo "判读:"
+echo "  curl error 7 / connection failed → SPA 默认拒绝（白名单未开），不是应用 403"
 echo "  spacheck=200           → 网络授权成功（白名单已开）"
 echo "  spacheck≠200 且 git/harbor=403 → 仍未授权（网关拒访）"
 echo "  spacheck=200 且 git/harbor=403 → 分服务策略或需登录；看是否有登录页/302"
-echo "  下一步: finenet-auth authorize && sleep 3 && finenet-auth diagnose"
+echo ""
+echo "下一步（DNS 已正常时）:"
+echo "  finenet-auth authorize && sleep 3 && finenet-auth diagnose"
+echo "  若仍 443 不通：公钥可能过期 → 再 apply 拿新密钥；或 UDP 30982 被拦"
