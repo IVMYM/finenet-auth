@@ -12,6 +12,7 @@ export const DEFAULTS = {
     { name: "spacheck", url: "https://app.finedo.cn/spacheck.json", expect: 200 },
     { name: "app", url: "https://app.finedo.cn/", expectOk: true },
     { name: "git", url: "https://git.finedo.cn/", expectOk: true },
+    { name: "harbor", url: "https://harbor.finedo.cn/", expectOk: true },
   ],
   /** UI-facing whitelist TTL (~20 min) */
   authValidMs: 1_200_000,

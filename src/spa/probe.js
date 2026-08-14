@@ -215,10 +215,12 @@ export async function diagnoseHosts({
 
   const spa = hosts.find((h) => h.name === "spacheck");
   const git = hosts.find((h) => h.name === "git");
+  const harbor = hosts.find((h) => h.name === "harbor");
   const authorized = spa?.httpStatus === 200;
   const fakeIpHit = hosts.some((h) => h.fakeIp || isFakeIp(h.dns));
   const loopbackHit = hosts.some((h) => isLoopbackIp(h.dns));
   const publicOk = hosts.some((h) => h.publicDns && !isFakeIp(h.publicDns));
+  const service403 = [git, harbor].filter((h) => h && h.httpStatus === 403);
 
   const advice = [];
 
@@ -242,21 +244,23 @@ export async function diagnoseHosts({
   if (!authorized) {
     if (!fakeIpHit) {
       advice.push("spacheck.json 不是 200 → 本机公网 IP 尚未进入 SPA 白名单。");
-      advice.push("请完成：申请密钥 → 企业微信粘贴公钥 → 请求授权，并确认 UDP 30982 未被拦截。");
+      advice.push("请先：finenet-auth authorize，等 2–3 秒再 diagnose；UDP 30982 必须直连可达。");
+      if (service403.length) {
+        advice.push(
+          `${service403.map((h) => h.name).join("/")} 返回 403 仍属未授权常见表现（网关拒访页），不要当成“已经进站了”。`
+        );
+      }
     } else {
       advice.push(
         "DNS 未恢复前不要判断敲门成败：Node/浏览器都走假 IP，authorize sent=true 也不能当已授权。"
       );
     }
-    if (git?.httpStatus === 403 && !fakeIpHit) {
-      advice.push(
-        "git.finedo.cn 返回 403 不等于已授权：不少网关在未敲门时直接回 403（而不是超时）。"
-      );
-    }
-  } else if (git && git.httpStatus === 403) {
-    advice.push("SPA 探测已通过，但 git 仍 403：可能是分服务白名单，或 Git 需要登录会话。");
-    advice.push("尝试再点一次「请求授权」/ `finenet-auth authorize`，等待数秒后重试 git。");
-    advice.push("浏览器无登录态访问 git；用 git clone 时确认账号权限。");
+  } else if (service403.length) {
+    advice.push(
+      `SPA(spacheck) 已通过，但 ${service403.map((h) => h.name).join("/")} 仍 403：可能是分服务白名单，或 Git/Harbor 应用层未登录。`
+    );
+    advice.push("对比：curl -sI https://app.finedo.cn/ 与 git/harbor；若 app 正常而 git/harbor 403，优先找运维确认 SPA 策略是否包含这两台。");
+    advice.push("Harbor/Git 浏览器无 Cookie 时也可能 401/403；能打开登录页或返回 302→login 通常算网络已通。");
   } else if (authorized) {
     advice.push("SPA 已放行。若个别页面仍异常，多半是应用层权限，而非网络授权。");
   }
