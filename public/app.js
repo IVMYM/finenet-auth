@@ -143,6 +143,9 @@ function renderSnapshot(snap) {
   els.factKeepalive.textContent = snap.keepAlive ? "运行中" : "未启动";
   els.factKnock.textContent = fmtMs(snap.config?.knockIntervalMs);
   els.factKey.textContent = fmtMs(snap.config?.publicKeyIntervalMs);
+  if (snap.lastDnsFix && !snap.lastDnsFix.skipped) {
+    els.keyMeta.title = `DNS → ${(snap.lastDnsFix.after?.servers || []).join(",")}`;
+  }
   if (snap.lastKnock) {
     els.factLast.textContent = `${snap.lastKnock.type} · ${fmtTime(snap.lastKnock.at)}${
       snap.lastKnock.skipped ? " · 跳过" : ""

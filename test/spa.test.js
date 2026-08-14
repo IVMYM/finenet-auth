@@ -115,3 +115,16 @@ describe("diagnose advice", () => {
     assert.equal(typeof lookupPublic, "function");
   });
 });
+
+describe("dns-fix", () => {
+  it("skips on non-darwin", async () => {
+    const { ensurePublicWifiDns, restoreWifiDns } = await import("../src/spa/dns-fix.js");
+    const r = await ensurePublicWifiDns({ enabled: true });
+    if (process.platform !== "darwin") {
+      assert.equal(r.skipped, true);
+      assert.equal(r.reason, "not-darwin");
+    }
+    const back = await restoreWifiDns();
+    assert.ok(back);
+  });
+});

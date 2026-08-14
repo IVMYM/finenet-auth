@@ -24,6 +24,8 @@ Usage:
   finenet-auth set-key [--key PEM]  Save WeCom public key (or stdin)
   finenet-auth apply                Send 申请密钥 (identification=0)
   finenet-auth authorize            Send 请求授权 knock
+  finenet-auth dns-fix             Set Wi-Fi DNS to public (macOS)
+  finenet-auth dns-restore          Restore previous Wi-Fi DNS
   finenet-auth serve [--port N]     Same as default start
 `);
 }
@@ -117,7 +119,13 @@ async function main() {
 
   if (cmd === "apply") {
     const result = await client.applyForKey();
-    console.log(JSON.stringify({ sent: result.sent, bytes: result.bytes }, null, 2));
+    console.log(
+      JSON.stringify(
+        { sent: result.sent, bytes: result.bytes, dns: client.lastDnsFix || null },
+        null,
+        2
+      )
+    );
     return;
   }
 
@@ -125,7 +133,13 @@ async function main() {
     const result = await client.requestAuth();
     console.log(
       JSON.stringify(
-        { sent: result.sent, skipped: result.skipped, reason: result.reason, bytes: result.bytes },
+        {
+          sent: result.sent,
+          skipped: result.skipped,
+          reason: result.reason,
+          bytes: result.bytes,
+          dns: client.lastDnsFix || null,
+        },
         null,
         2
       )
@@ -135,6 +149,18 @@ async function main() {
     const state = await client.probe();
     console.log(state.status);
     process.exit(state.authorized ? 0 : 2);
+  }
+
+  if (cmd === "dns-fix") {
+    const result = await client.fixWifiDns("cli");
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result.ok === false ? 1 : 0);
+  }
+
+  if (cmd === "dns-restore") {
+    const result = await client.restoreWifiDns();
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result.ok === false ? 1 : 0);
   }
 
   if (has("--help", argv)) {

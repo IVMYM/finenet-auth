@@ -67,9 +67,13 @@ finenet-auth apply && finenet-auth authorize && finenet-auth status
 |------|------|
 | `PORT` / `HOST` | UI 监听地址，默认 `127.0.0.1:3927` |
 | `FINENET_DATA_DIR` | 覆盖密钥存储目录 |
+| `FINENET_SKIP_DNS_FIX=1` | 关闭申请/授权时自动改 Wi‑Fi DNS（仅 macOS） |
+| `FINENET_PUBLIC_DNS` | 公共 DNS，默认 `223.5.5.5,8.8.8.8` |
+| `FINENET_WIFI_SERVICE` | 网络服务名，默认自动检测 `Wi-Fi` |
 
 ## 说明
 
+- 申请密钥 / 请求授权时（macOS）会自动把 Wi‑Fi DNS 改为 `223.5.5.5` / `8.8.8.8`，避免 Clash fake-IP；可用 `finenet-auth dns-restore` 恢复。
 - 防火墙放行的是**公网源 IP**，不是进程级 VPN。换 Wi‑Fi / 休眠超时后会回到未授权。
 - 若 UDP `30982` 被酒店/家用 NAT 拦截，敲门无法到达。
 - 本工具协议字段按 FinedoIT 终端「终端安全 → 网络授权」行为对齐；若网关字段有定制差异，可在 `src/spa/knock.js` 调整包体。

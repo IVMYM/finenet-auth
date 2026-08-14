@@ -78,7 +78,7 @@
               <div class="step-index">01</div>
               <div class="step-body">
                 <h3>申请密钥</h3>
-                <p>向 <span class="mono">finedo.cn:30982</span> 发送申请；运维通过企业微信下发 RSA 公钥。</p>
+                <p>向 <span class="mono">finedo.cn:30982</span> 发送申请；运维通过企业微信下发 RSA 公钥。Mac 上会自动把 Wi‑Fi DNS 切到 <span class="mono">223.5.5.5</span>。</p>
                 <button type="button" class="btn secondary" id="btnApply">申请密钥</button>
               </div>
             </article>
@@ -87,7 +87,7 @@
               <div class="step-index">02</div>
               <div class="step-body">
                 <h3>请求授权</h3>
-                <p>粘贴企业微信公钥，客户端用其加密 <span class="mono">sign</span> 后敲门。</p>
+                <p>粘贴企业微信公钥，客户端用其加密 <span class="mono">sign</span> 后敲门（同样会先修正 Wi‑Fi DNS）。</p>
                 <label class="field key-field">
                   <span>RSA 公钥</span>
                   <textarea

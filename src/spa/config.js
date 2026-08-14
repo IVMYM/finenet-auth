@@ -28,6 +28,15 @@ export const DEFAULTS = {
   /** Max failed knocks before client refuses further UDP until cooldown */
   knockFailLimit: 5,
   knockCooldownMs: 30 * 60_000,
+  /**
+   * On macOS, automatically set Wi-Fi DNS to public resolvers
+   * before 申请密钥 / 请求授权 (avoids Clash fake-IP 198.18/15).
+   */
+  autoFixWifiDns: process.env.FINENET_SKIP_DNS_FIX === "1" ? false : true,
+  publicDns: (process.env.FINENET_PUBLIC_DNS || "223.5.5.5,8.8.8.8")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
   /** Probe cadence while unauthorized */
   probeIntervalMs: 1_000,
   /** HTTP timeouts */

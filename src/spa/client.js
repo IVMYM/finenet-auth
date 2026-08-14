@@ -6,6 +6,7 @@ import { normalizePublicKey } from "./crypto.js";
 import { applyKey, authorizeKnock } from "./knock.js";
 import { checkStatus, diagnoseHosts } from "./probe.js";
 import { KeepAlive, ingestKeyReply } from "./keepalive.js";
+import { ensurePublicWifiDns, restoreWifiDns } from "./dns-fix.js";
 
 /**
  * Orchestrates 申请密钥 → 请求授权 → probe → keep-alive.
@@ -214,8 +215,49 @@ export class SpaClient extends EventEmitter {
   }
 
   /** Step 1 — 申请密钥 */
+  async fixWifiDns(reason = "auth") {
+    if (!this.config.autoFixWifiDns) {
+      return { ok: true, skipped: true, reason: "disabled" };
+    }
+    try {
+      const result = await ensurePublicWifiDns({
+        enabled: true,
+        publicDns: this.config.publicDns,
+      });
+      this.lastDnsFix = { at: Date.now(), reason, ...result };
+      if (!result.skipped) {
+        this._log("info", "已切换 Wi-Fi DNS 为公共解析", {
+          service: result.service,
+          after: result.after?.servers,
+          before: result.before?.automatic ? "automatic" : result.before?.servers,
+        });
+      } else {
+        this._log("info", "Wi-Fi DNS 未改动", { reason: result.reason, service: result.service });
+      }
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this._log("warn", "自动改 Wi-Fi DNS 失败", { message });
+      this.lastDnsFix = { at: Date.now(), reason, ok: false, error: message };
+      return this.lastDnsFix;
+    }
+  }
+
+  async restoreWifiDns() {
+    try {
+      const result = await restoreWifiDns();
+      this._log("info", "已恢复 Wi-Fi DNS", result);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this._log("warn", "恢复 Wi-Fi DNS 失败", { message });
+      return { ok: false, error: message };
+    }
+  }
+
   async applyForKey() {
     this._assertCanKnock("apply");
+    await this.fixWifiDns("apply");
     const ctx = this._ctx();
     const result = await applyKey(ctx);
     this._noteKnockSent();
@@ -227,6 +269,7 @@ export class SpaClient extends EventEmitter {
   /** Step 2 — 请求授权 (manual, identification "0") */
   async requestAuth() {
     this._assertCanKnock("authorize");
+    await this.fixWifiDns("authorize");
     const ctx = this._ctx();
     if (!ctx.publicKey) {
       throw new Error("尚未保存公钥。请粘贴企业微信下发的 RSA 公钥后再请求授权。");
@@ -298,6 +341,7 @@ export class SpaClient extends EventEmitter {
       state: this.state,
       hosts: this.hosts,
       keepAlive: this.keepAlive.running,
+      lastDnsFix: this.lastDnsFix || null,
       config: {
         udpHost: this.config.udpHost,
         udpPort: this.config.udpPort,
@@ -305,6 +349,8 @@ export class SpaClient extends EventEmitter {
         authValidMs: this.config.authValidMs,
         knockIntervalMs: this.config.knockIntervalMs,
         publicKeyIntervalMs: this.config.publicKeyIntervalMs,
+        autoFixWifiDns: this.config.autoFixWifiDns,
+        publicDns: this.config.publicDns,
       },
       lastKnock: this.lastKnock
         ? {
