@@ -4,7 +4,7 @@ import { getMachineId, getDeviceType } from "./machine.js";
 import { KeyStore } from "./store.js";
 import { normalizePublicKey } from "./crypto.js";
 import { applyKey, authorizeKnock } from "./knock.js";
-import { checkStatus } from "./probe.js";
+import { checkStatus, diagnoseHosts } from "./probe.js";
 import { KeepAlive, ingestKeyReply } from "./keepalive.js";
 
 /**
@@ -18,6 +18,7 @@ export class SpaClient extends EventEmitter {
     this.machineid = options.machineid || getMachineId();
     this.deviceType = options.deviceType || getDeviceType();
     this.state = null;
+    this.hosts = null;
     this.lastKnock = null;
     this.logs = [];
     this.keepAlive = new KeepAlive(this, {
@@ -106,19 +107,56 @@ export class SpaClient extends EventEmitter {
       timeoutMs: this.config.probeTimeoutMs,
     });
     this.state = result;
+
+    // Also refresh host matrix (git/app) — cheap parallel diagnose
+    try {
+      const diag = await diagnoseHosts({
+        machineId: this.machineid,
+        timeoutMs: this.config.probeTimeoutMs,
+        hostChecks: this.config.hostChecks,
+      });
+      this.hosts = diag.hosts;
+      result.hosts = diag.hosts;
+      result.advice = diag.advice;
+    } catch {
+      /* ignore host matrix errors */
+    }
+
     this.emit("status", result);
     this._log(result.authorized ? "ok" : "warn", result.status, {
       httpStatus: result.httpStatus,
       latencyMs: result.latencyMs,
       error: result.error,
+      git: this.hosts?.find((h) => h.name === "git")?.httpStatus,
     });
 
     if (result.authorized) {
       if (!this.keepAlive.running) this.keepAlive.start();
-      // Try remote timer overrides once online
       this.refreshTimers().catch(() => {});
     }
     return result;
+  }
+
+  async diagnose() {
+    const diag = await diagnoseHosts({
+      machineId: this.machineid,
+      timeoutMs: this.config.probeTimeoutMs,
+      hostChecks: this.config.hostChecks,
+    });
+    this.hosts = diag.hosts;
+    this.state = {
+      authorized: diag.authorized,
+      status: diag.status,
+      httpStatus: diag.hosts.find((h) => h.name === "spacheck")?.httpStatus || 0,
+      checkedAt: diag.checkedAt,
+      hosts: diag.hosts,
+      advice: diag.advice,
+    };
+    this._log("info", "diagnose", {
+      status: diag.status,
+      git: diag.hosts.find((h) => h.name === "git")?.httpStatus,
+    });
+    return diag;
   }
 
   /** Step 1 — 申请密钥 */
@@ -193,6 +231,7 @@ export class SpaClient extends EventEmitter {
       hasKey: Boolean(key?.publicKey),
       keyUpdatedAt: key?.updatedAt || null,
       state: this.state,
+      hosts: this.hosts,
       keepAlive: this.keepAlive.running,
       config: {
         udpHost: this.config.udpHost,

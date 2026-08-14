@@ -108,6 +108,11 @@ async function handleApi(req, res, pathname, client) {
     return json(res, 200, { ok: true, state, snapshot: client.snapshot() });
   }
 
+  if (pathname === "/api/diagnose" && method === "POST") {
+    const diagnose = await client.diagnose();
+    return json(res, 200, { ok: true, diagnose, snapshot: client.snapshot() });
+  }
+
   if (pathname === "/api/profile" && method === "POST") {
     const body = await readBody(req);
     const profile = client.setProfile(body);

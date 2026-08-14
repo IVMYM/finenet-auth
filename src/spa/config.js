@@ -7,6 +7,12 @@ export const DEFAULTS = {
   udpPort: 30982,
   probeUrl: "https://app.finedo.cn/spacheck.json",
   returnTimeUrl: "https://app.finedo.cn/spaservice/whitemng/returntime",
+  /** Extra host checks shown in diagnose / UI (403 often means SPA still closed). */
+  hostChecks: [
+    { name: "spacheck", url: "https://app.finedo.cn/spacheck.json", expect: 200 },
+    { name: "app", url: "https://app.finedo.cn/", expectOk: true },
+    { name: "git", url: "https://git.finedo.cn/", expectOk: true },
+  ],
   /** UI-facing whitelist TTL (~20 min) */
   authValidMs: 1_200_000,
   /** Silent re-knock (~10 min) */

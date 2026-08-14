@@ -93,3 +93,11 @@ describe("store", () => {
     }
   });
 });
+
+describe("diagnose advice", () => {
+  it("flags 403 as likely unauthorized when spa is down", async () => {
+    const { DEFAULTS } = await import("../src/spa/config.js");
+    assert.ok(DEFAULTS.hostChecks.some((h) => h.name === "git"));
+    assert.ok(DEFAULTS.hostChecks.some((h) => h.name === "spacheck"));
+  });
+});

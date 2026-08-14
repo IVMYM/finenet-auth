@@ -19,6 +19,7 @@ function usage() {
 Usage:
   finenet-auth                      Start local UI (default :3927)
   finenet-auth status               Probe 已授权 / 未授权
+  finenet-auth diagnose             Check spacheck / app / git (解释 403)
   finenet-auth set-profile --user ID --name NAME
   finenet-auth set-key [--key PEM]  Save WeCom public key (or stdin)
   finenet-auth apply                Send 申请密钥 (identification=0)
@@ -66,6 +67,22 @@ async function main() {
     console.log(state.status);
     console.log(JSON.stringify(state, null, 2));
     process.exit(state.authorized ? 0 : 2);
+  }
+
+  if (cmd === "diagnose") {
+    const diag = await client.diagnose();
+    console.log(diag.status);
+    for (const h of diag.hosts) {
+      console.log(
+        `- ${h.name.padEnd(9)} HTTP ${h.httpStatus || "—"}  dns=${h.dns || "—"}  ${h.hint || h.error || ""}`
+      );
+    }
+    if (diag.advice?.length) {
+      console.log("\n建议:");
+      for (const line of diag.advice) console.log(`  • ${line}`);
+    }
+    console.log("\n" + JSON.stringify(diag, null, 2));
+    process.exit(diag.authorized ? 0 : 2);
   }
 
   if (cmd === "set-profile") {

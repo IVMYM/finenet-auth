@@ -6,6 +6,8 @@ const els = {
   statusMeta: $("#statusMeta"),
   ttlBox: $("#ttlBox"),
   ttlValue: $("#ttlValue"),
+  hostMatrix: $("#hostMatrix"),
+  adviceBox: $("#adviceBox"),
   machineLabel: $("#machineLabel"),
   userid: $("#userid"),
   username: $("#username"),
@@ -17,6 +19,7 @@ const els = {
   factLast: $("#factLast"),
   logList: $("#logList"),
   btnProbe: $("#btnProbe"),
+  btnDiagnose: $("#btnDiagnose"),
   btnScroll: $("#btnScroll"),
   btnApply: $("#btnApply"),
   btnAuthorize: $("#btnAuthorize"),
@@ -59,6 +62,36 @@ function setBusy(btn, busy, label) {
   btn.textContent = busy ? label : btn.dataset.label || btn.textContent;
 }
 
+function renderHosts(hosts, advice) {
+  if (!hosts?.length) {
+    els.hostMatrix.hidden = true;
+    els.adviceBox.hidden = true;
+    return;
+  }
+  els.hostMatrix.hidden = false;
+  els.hostMatrix.innerHTML = "";
+  for (const h of hosts) {
+    const li = document.createElement("li");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = h.name;
+    const code = document.createElement("span");
+    code.className = "code";
+    code.textContent = h.httpStatus ? String(h.httpStatus) : "—";
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = h.hint || h.error || `dns ${h.dns || "—"}`;
+    li.append(name, code, hint);
+    els.hostMatrix.append(li);
+  }
+  if (advice?.length) {
+    els.adviceBox.hidden = false;
+    els.adviceBox.textContent = advice[0];
+  } else {
+    els.adviceBox.hidden = true;
+  }
+}
+
 function renderStatus(state) {
   const authorized = Boolean(state?.authorized);
   const panelState = state ? (authorized ? "authorized" : "unauthorized") : "unknown";
@@ -82,9 +115,11 @@ function renderStatus(state) {
     authorizedSince = null;
     els.statusMeta.textContent = state.error
       ? `不可达：${state.error}`
-      : `HTTP ${state.httpStatus || "—"} · 未进入白名单`;
+      : `HTTP ${state.httpStatus || "—"} · 未进入白名单（git 403 也常表示未授权）`;
     els.ttlBox.hidden = true;
   }
+
+  renderHosts(state.hosts || snapshot?.hosts, state.advice);
 }
 
 function renderSnapshot(snap) {
@@ -117,6 +152,7 @@ function renderSnapshot(snap) {
   }
 
   renderStatus(snap.state);
+  if (snap.hosts) renderHosts(snap.hosts, snap.state?.advice);
   renderLogs(snap.logs || []);
   scheduleProbeLoop(snap.state?.authorized);
 }
@@ -174,6 +210,22 @@ els.btnProbe.addEventListener("click", async () => {
     els.statusMeta.textContent = err.message;
   } finally {
     setBusy(els.btnProbe, false);
+  }
+});
+
+els.btnDiagnose.addEventListener("click", async () => {
+  setBusy(els.btnDiagnose, true, "诊断中…");
+  try {
+    const data = await api("/api/diagnose", { method: "POST", body: "{}" });
+    renderSnapshot(data.snapshot);
+    if (data.diagnose?.advice?.length) {
+      els.adviceBox.hidden = false;
+      els.adviceBox.textContent = data.diagnose.advice.join(" ");
+    }
+  } catch (err) {
+    els.statusMeta.textContent = err.message;
+  } finally {
+    setBusy(els.btnDiagnose, false);
   }
 });
 

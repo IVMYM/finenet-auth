@@ -239,6 +239,47 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.host-matrix {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.host-matrix li {
+  display: grid;
+  grid-template-columns: 88px 72px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
+  font-size: 0.86rem;
+}
+
+.host-matrix .name {
+  font-weight: 650;
+  font-family: var(--font-display);
+}
+
+.host-matrix .code {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.host-matrix .hint {
+  color: var(--muted);
+}
+
+.advice {
+  margin: 12px 0 0;
+  color: var(--warn);
+  font-size: 0.92rem;
+  max-width: 40rem;
+}
+
 .cta-row {
   display: flex;
   flex-wrap: wrap;
