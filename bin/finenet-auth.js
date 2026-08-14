@@ -74,7 +74,7 @@ async function main() {
     console.log(diag.status);
     for (const h of diag.hosts) {
       console.log(
-        `- ${h.name.padEnd(9)} HTTP ${h.httpStatus || "—"}  dns=${h.dns || "—"}  ${h.hint || h.error || ""}`
+        `- ${h.name.padEnd(9)} HTTP ${h.httpStatus || "—"}  dns=${h.dns || "—"}  public=${h.publicDns || "—"}  ${h.hint || h.error || ""}`
       );
     }
     if (diag.advice?.length) {

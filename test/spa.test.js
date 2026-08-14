@@ -109,4 +109,9 @@ describe("diagnose advice", () => {
     assert.equal(isFakeIp("120.210.159.62"), false);
     assert.equal(isLoopbackIp("127.0.0.1"), true);
   });
+
+  it("exposes lookupPublic helper", async () => {
+    const { lookupPublic } = await import("../src/spa/probe.js");
+    assert.equal(typeof lookupPublic, "function");
+  });
 });

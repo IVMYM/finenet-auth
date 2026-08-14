@@ -1,4 +1,4 @@
-import { lookup } from "node:dns/promises";
+import { lookup, Resolver } from "node:dns/promises";
 import { DEFAULTS } from "./config.js";
 import { getMachineId } from "./machine.js";
 
@@ -11,6 +11,22 @@ export function isFakeIp(addr) {
 
 export function isLoopbackIp(addr) {
   return addr === "127.0.0.1" || addr === "::1" || Boolean(addr?.startsWith("127."));
+}
+
+/** Resolve via a public DNS (bypass local stub / fake-IP). */
+export async function lookupPublic(hostname, servers = ["223.5.5.5", "8.8.8.8"]) {
+  const resolver = new Resolver();
+  resolver.setServers(servers);
+  try {
+    const v4 = await resolver.resolve4(hostname);
+    return { address: v4[0] || null, all: v4, error: null };
+  } catch (err) {
+    return {
+      address: null,
+      all: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 /**
@@ -89,8 +105,12 @@ export async function checkStatus(opts) {
   };
 }
 
-function dnsHint(dns, { httpStatus, error } = {}) {
+function dnsHint(dns, { httpStatus, error, publicDns } = {}) {
   if (isFakeIp(dns)) {
+    const pub = publicDns?.address;
+    if (pub && !isFakeIp(pub)) {
+      return `系统DNS=fake-IP(${dns})，公共DNS=${pub} → 代理已关但本机DNS仍被劫持`;
+    }
     return "DNS=198.18.x.x → Clash/Surge fake-IP，流量被本地代理劫持，不是真实 SPA 地址";
   }
   if (isLoopbackIp(dns)) {
@@ -114,14 +134,17 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
   }
 
   let dns = null;
+  let publicDns = null;
   try {
     const r = await lookup(u.hostname, { all: false });
     dns = r.address;
   } catch (err) {
+    publicDns = await lookupPublic(u.hostname);
     return {
       url: u.toString(),
       host: u.hostname,
       dns: null,
+      publicDns: publicDns.address,
       httpStatus: 0,
       ok: false,
       latencyMs: Date.now() - started,
@@ -130,6 +153,8 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
       fakeIp: false,
     };
   }
+
+  publicDns = await lookupPublic(u.hostname);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -145,11 +170,12 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
       url: u.toString(),
       host: u.hostname,
       dns,
+      publicDns: publicDns.address,
       httpStatus: status,
       ok: status >= 200 && status < 400,
       latencyMs: Date.now() - started,
       error: null,
-      hint: dnsHint(dns, { httpStatus: status }),
+      hint: dnsHint(dns, { httpStatus: status, publicDns }),
       fakeIp: isFakeIp(dns),
     };
   } catch (err) {
@@ -158,11 +184,12 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
       url: u.toString(),
       host: u.hostname,
       dns,
+      publicDns: publicDns.address,
       httpStatus: 0,
       ok: false,
       latencyMs: Date.now() - started,
       error: message.includes("abort") ? "timeout / connection reset" : message,
-      hint: dnsHint(dns, { error: message }),
+      hint: dnsHint(dns, { error: message, publicDns }),
       fakeIp: isFakeIp(dns),
     };
   } finally {
@@ -172,7 +199,7 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
 
 /**
  * Multi-host diagnose: spacheck + app + git.
- * Helps explain fake-IP / 403 / SPA-closed cases.
+ * Helps explain fake-IP / residual DNS hijack / 403 / SPA-closed cases.
  */
 export async function diagnoseHosts({
   machineId,
@@ -191,19 +218,23 @@ export async function diagnoseHosts({
   const authorized = spa?.httpStatus === 200;
   const fakeIpHit = hosts.some((h) => h.fakeIp || isFakeIp(h.dns));
   const loopbackHit = hosts.some((h) => isLoopbackIp(h.dns));
+  const publicOk = hosts.some((h) => h.publicDns && !isFakeIp(h.publicDns));
 
   const advice = [];
 
   if (fakeIpHit) {
     advice.push(
-      "关键：DNS 落在 198.18.0.0/15，这是 Clash / Surge / 类似工具的 fake-IP，不是 finedo 真实地址。"
+      "关键：系统 DNS 仍返回 198.18.x.x（Clash/Surge fake-IP）。连 baidu 也是这个段 = 代理进程/DNS 残留，不是“规则没写 DIRECT”。"
     );
+    if (publicOk) {
+      advice.push(
+        `公共 DNS 能解析到真实 IP（例如 ${hosts.find((h) => h.publicDns)?.publicDns}），说明网络正常，只需清掉本机 DNS 劫持。`
+      );
+    }
     advice.push(
-      "请把 *.finedo.cn、finedo.cn 设为 DIRECT（或关闭 fake-IP / 对这几个域名用 real-ip），再重新 authorize + diagnose。"
+      "Mac 排查：1) 完全退出 Clash/Surge（菜单栏 Quit，不要只关“系统代理”） 2) dig @223.5.5.5 app.finedo.cn 应变公网 3) 系统设置→DNS 改回自动或 223.5.5.5 4) sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
     );
-    advice.push(
-      "Clash 示例规则：DOMAIN-SUFFIX,finedo.cn,DIRECT；并确保 UDP 30982 也走直连，否则敲门到不了网关。"
-    );
+    advice.push("也可运行: bash scripts/fix-mac-dns.sh");
   } else if (loopbackHit && !authorized) {
     advice.push("域名解析到 127.0.0.1 — 本地 SDP 占位。需先成功敲门，解析才会切到真实入口。");
   }
@@ -214,7 +245,7 @@ export async function diagnoseHosts({
       advice.push("请完成：申请密钥 → 企业微信粘贴公钥 → 请求授权，并确认 UDP 30982 未被拦截。");
     } else {
       advice.push(
-        "在代理劫持未排除前，authorize 显示 sent=true 也不能证明白名单已生效（探测走的是假 IP）。"
+        "DNS 未恢复前不要判断敲门成败：Node/浏览器都走假 IP，authorize sent=true 也不能当已授权。"
       );
     }
     if (git?.httpStatus === 403 && !fakeIpHit) {
@@ -237,6 +268,6 @@ export async function diagnoseHosts({
     machineId: mid,
     hosts,
     advice,
-    flags: { fakeIpHit, loopbackHit },
+    flags: { fakeIpHit, loopbackHit, publicOk },
   };
 }
