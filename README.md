@@ -15,55 +15,51 @@
 
 ## 本地部署
 
-前置：本机已装 **Node.js ≥ 18**。
+前置：本机已装 **Node.js ≥ 18**（Mac 可用 `brew install node`）。
+
+### Mac（安装 + 登录自启）
+
+云端无法直接写入你的 Mac，请在 **本机 Terminal** 执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/IVMYM/finenet-auth/cursor/finenet-auth-miniapp-5029/scripts/install-mac.sh | bash
+```
+
+效果：
+- 安装到 `~/Applications/finenet-auth`
+- 注册 LaunchAgent（登录自动启动）
+- 打开 `http://127.0.0.1:3927`
+
+自启文件：`~/Library/LaunchAgents/cn.finedo.finenet-auth.plist`  
+卸载：`bash ~/Applications/finenet-auth/scripts/uninstall-local.sh`
+
+### 通用（Linux / macOS）
 
 ```bash
 git clone https://github.com/IVMYM/finenet-auth.git
 cd finenet-auth
-# 若用本 PR 分支：
-# git checkout cursor/finenet-auth-miniapp-5029
-
-bash scripts/install-local.sh
-# 浏览器打开 http://127.0.0.1:3927
+git checkout cursor/finenet-auth-miniapp-5029
+bash scripts/install-local.sh --service
 ```
-
-只安装、不立刻启动：
 
 ```bash
-npm run install:local
-finenet-auth          # 启动 UI
-finenet-auth status   # 探测 已授权/未授权
+npm run install:local     # 只安装命令
+finenet-auth              # 手动启动 UI
+finenet-auth status
+npm run uninstall:local   # 卸载命令与自启
 ```
 
-Linux 开机自启（systemd 用户服务）：
-
-```bash
-npm run install:service
-systemctl --user status finenet-auth
-# 卸载：npm run uninstall:local
-```
-
-Windows（PowerShell）：
-
-```powershell
-git clone https://github.com/IVMYM/finenet-auth.git
-cd finenet-auth
-npm install
-npm start
-# 浏览器打开 http://127.0.0.1:3927
-```
+Windows（PowerShell）：`npm install && npm start` → `http://127.0.0.1:3927`
 
 CLI：
 
 ```bash
 finenet-auth set-profile --user 10086 --name 张三
 finenet-auth set-key --key "$(cat wecom.pem)"
-finenet-auth apply
-finenet-auth authorize
-finenet-auth status
+finenet-auth apply && finenet-auth authorize && finenet-auth status
 ```
 
-本地数据：`~/.finenet-auth/keys.json`（按 userid 存公钥，对应原客户端 `tb_sqlite_cipher`）。
+本地数据：`~/.finenet-auth/keys.json`。
 
 ## 环境变量
 

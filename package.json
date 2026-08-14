@@ -13,6 +13,7 @@
     "test": "node --test test/*.test.js",
     "install:local": "bash scripts/install-local.sh --no-start",
     "install:service": "bash scripts/install-local.sh --service --no-start",
+    "install:mac": "bash scripts/install-mac.sh",
     "uninstall:local": "bash scripts/uninstall-local.sh"
   },
   "engines": {
