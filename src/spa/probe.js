@@ -2,6 +2,17 @@ import { lookup } from "node:dns/promises";
 import { DEFAULTS } from "./config.js";
 import { getMachineId } from "./machine.js";
 
+/** Clash / Surge / QuantumultX fake-IP pool (RFC 2544 benchmark range). */
+export function isFakeIp(addr) {
+  if (!addr || typeof addr !== "string") return false;
+  // 198.18.0.0 – 198.19.255.255
+  return /^198\.1[89]\.\d+\.\d+$/.test(addr);
+}
+
+export function isLoopbackIp(addr) {
+  return addr === "127.0.0.1" || addr === "::1" || Boolean(addr?.startsWith("127."));
+}
+
 /**
  * Reachability check — "已授权" means HTTP 200 from spacheck.json,
  * NOT a cryptographic verify of the knock reply.
@@ -78,6 +89,22 @@ export async function checkStatus(opts) {
   };
 }
 
+function dnsHint(dns, { httpStatus, error } = {}) {
+  if (isFakeIp(dns)) {
+    return "DNS=198.18.x.x → Clash/Surge fake-IP，流量被本地代理劫持，不是真实 SPA 地址";
+  }
+  if (isLoopbackIp(dns)) {
+    return "解析到本机 — 本地 SDP 重定向，SPA 未打通时常失败/403";
+  }
+  if (httpStatus === 403) {
+    return "HTTP 403 — 常见于 SPA 未放行（网关拒访），或 Git 服务层拒绝未登录访问";
+  }
+  if (httpStatus === 200 || (httpStatus >= 300 && httpStatus < 400)) return "可达";
+  if (httpStatus === 401) return "可达但需登录";
+  if (error) return "连接失败 — SPA 默认拒绝时常表现为超时/重置（比 403 更“隐形”）";
+  return null;
+}
+
 async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } = {}) {
   const started = Date.now();
   const u = new URL(url);
@@ -91,16 +118,16 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
     const r = await lookup(u.hostname, { all: false });
     dns = r.address;
   } catch (err) {
-    dns = null;
     return {
       url: u.toString(),
       host: u.hostname,
-      dns,
+      dns: null,
       httpStatus: 0,
       ok: false,
       latencyMs: Date.now() - started,
       error: err instanceof Error ? err.message : String(err),
       hint: "DNS 失败",
+      fakeIp: false,
     };
   }
 
@@ -114,17 +141,6 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
       headers: { Accept: "*/*", "Cache-Control": "no-cache" },
     });
     const status = res.status;
-    let hint = null;
-    if (status === 403) {
-      hint =
-        dns === "127.0.0.1" || dns === "::1"
-          ? "解析到本机 — 本地 SDP 重定向，SPA 未打通时常返回 403"
-          : "HTTP 403 — 常见于 SPA 未放行（网关拒访），或 Git 服务层拒绝未登录访问";
-    } else if (status === 200 || (status >= 300 && status < 400)) {
-      hint = "可达";
-    } else if (status === 401) {
-      hint = "可达但需登录";
-    }
     return {
       url: u.toString(),
       host: u.hostname,
@@ -133,7 +149,8 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
       ok: status >= 200 && status < 400,
       latencyMs: Date.now() - started,
       error: null,
-      hint,
+      hint: dnsHint(dns, { httpStatus: status }),
+      fakeIp: isFakeIp(dns),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -145,7 +162,8 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
       ok: false,
       latencyMs: Date.now() - started,
       error: message.includes("abort") ? "timeout / connection reset" : message,
-      hint: "连接失败 — SPA 默认拒绝时常表现为超时/重置（比 403 更“隐形”）",
+      hint: dnsHint(dns, { error: message }),
+      fakeIp: isFakeIp(dns),
     };
   } finally {
     clearTimeout(timer);
@@ -154,7 +172,7 @@ async function probeOne(url, { timeoutMs = DEFAULTS.probeTimeoutMs, machineId } 
 
 /**
  * Multi-host diagnose: spacheck + app + git.
- * Helps explain "spacheck 已授权但 git 403" / "全程 403" cases.
+ * Helps explain fake-IP / 403 / SPA-closed cases.
  */
 export async function diagnoseHosts({
   machineId,
@@ -171,12 +189,35 @@ export async function diagnoseHosts({
   const spa = hosts.find((h) => h.name === "spacheck");
   const git = hosts.find((h) => h.name === "git");
   const authorized = spa?.httpStatus === 200;
+  const fakeIpHit = hosts.some((h) => h.fakeIp || isFakeIp(h.dns));
+  const loopbackHit = hosts.some((h) => isLoopbackIp(h.dns));
 
   const advice = [];
+
+  if (fakeIpHit) {
+    advice.push(
+      "关键：DNS 落在 198.18.0.0/15，这是 Clash / Surge / 类似工具的 fake-IP，不是 finedo 真实地址。"
+    );
+    advice.push(
+      "请把 *.finedo.cn、finedo.cn 设为 DIRECT（或关闭 fake-IP / 对这几个域名用 real-ip），再重新 authorize + diagnose。"
+    );
+    advice.push(
+      "Clash 示例规则：DOMAIN-SUFFIX,finedo.cn,DIRECT；并确保 UDP 30982 也走直连，否则敲门到不了网关。"
+    );
+  } else if (loopbackHit && !authorized) {
+    advice.push("域名解析到 127.0.0.1 — 本地 SDP 占位。需先成功敲门，解析才会切到真实入口。");
+  }
+
   if (!authorized) {
-    advice.push("spacheck.json 不是 200 → 本机公网 IP 尚未进入 SPA 白名单。");
-    advice.push("请完成：申请密钥 → 企业微信粘贴公钥 → 请求授权，并确认 UDP 30982 未被拦截。");
-    if (git?.httpStatus === 403) {
+    if (!fakeIpHit) {
+      advice.push("spacheck.json 不是 200 → 本机公网 IP 尚未进入 SPA 白名单。");
+      advice.push("请完成：申请密钥 → 企业微信粘贴公钥 → 请求授权，并确认 UDP 30982 未被拦截。");
+    } else {
+      advice.push(
+        "在代理劫持未排除前，authorize 显示 sent=true 也不能证明白名单已生效（探测走的是假 IP）。"
+      );
+    }
+    if (git?.httpStatus === 403 && !fakeIpHit) {
       advice.push(
         "git.finedo.cn 返回 403 不等于已授权：不少网关在未敲门时直接回 403（而不是超时）。"
       );
@@ -196,5 +237,6 @@ export async function diagnoseHosts({
     machineId: mid,
     hosts,
     advice,
+    flags: { fakeIpHit, loopbackHit },
   };
 }

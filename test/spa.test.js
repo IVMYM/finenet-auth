@@ -100,4 +100,13 @@ describe("diagnose advice", () => {
     assert.ok(DEFAULTS.hostChecks.some((h) => h.name === "git"));
     assert.ok(DEFAULTS.hostChecks.some((h) => h.name === "spacheck"));
   });
+
+  it("detects Clash/Surge fake-IP range 198.18/15", async () => {
+    const { isFakeIp, isLoopbackIp } = await import("../src/spa/probe.js");
+    assert.equal(isFakeIp("198.18.1.169"), true);
+    assert.equal(isFakeIp("198.18.0.34"), true);
+    assert.equal(isFakeIp("198.19.255.1"), true);
+    assert.equal(isFakeIp("120.210.159.62"), false);
+    assert.equal(isLoopbackIp("127.0.0.1"), true);
+  });
 });
