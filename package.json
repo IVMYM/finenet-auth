@@ -1,0 +1,38 @@
+{
+  "name": "finenet-auth",
+  "version": "1.0.0",
+  "description": "Finedo 网络授权小程序 — SPA/SDP UDP knock client",
+  "type": "module",
+  "bin": {
+    "finenet-auth": "./bin/finenet-auth.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "cli": "node bin/finenet-auth.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/*.test.js",
+    "install:local": "bash scripts/install-local.sh --no-start",
+    "install:service": "bash scripts/install-local.sh --service --no-start",
+    "install:mac": "bash scripts/install-mac.sh",
+    "disconnect:tun": "bash scripts/disconnect-proxy-tun.sh",
+    "uninstall:local": "bash scripts/uninstall-local.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "finedo",
+    "spa",
+    "sdp",
+    "zerotrust",
+    "网络授权"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "node-machine-id": "^1.1.12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IVMYM/finenet-auth.git"
+  }
+}

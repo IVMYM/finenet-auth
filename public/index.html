@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Finedo 网络授权</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <div class="mesh" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <div class="brand-text">
+        <span class="brand-name">Finedo</span>
+        <span class="brand-sub">网络授权</span>
+      </div>
+      <div class="machine" id="machineLabel">machine…</div>
+    </header>
+
+    <main class="stage">
+      <section class="hero" id="hero">
+        <p class="eyebrow">SPA / SDP Gate · UDP 30982</p>
+        <h1 class="brand-hero">Finedo</h1>
+        <p class="lede">
+          敲门授权本机公网 IP，打通
+          <span class="mono">app.finedo.cn</span> /
+          <span class="mono">git.finedo.cn</span>
+        </p>
+
+        <div class="status-panel" id="statusPanel" data-state="unknown">
+          <div class="status-orb" aria-hidden="true"></div>
+          <div class="status-copy">
+            <div class="status-label" id="statusLabel">检测中</div>
+            <div class="status-meta" id="statusMeta">正在探测 spacheck.json…</div>
+          </div>
+          <div class="ttl" id="ttlBox" hidden>
+            <span class="ttl-label">预计有效</span>
+            <span class="ttl-value" id="ttlValue">—</span>
+          </div>
+        </div>
+
+        <ul class="host-matrix" id="hostMatrix" hidden></ul>
+        <p class="advice" id="adviceBox" hidden></p>
+
+        <div class="cta-row">
+          <button type="button" class="btn primary" id="btnProbe">重新探测</button>
+          <button type="button" class="btn ghost" id="btnDiagnose">诊断 403</button>
+          <button type="button" class="btn ghost" id="btnScroll">开始授权</button>
+        </div>
+      </section>
+
+      <section class="auth-flow" id="authFlow">
+        <h2>两步握手</h2>
+        <p class="section-lead">申请密钥证明身份，请求授权敲开本机 IP 的白名单窗口。</p>
+
+        <form class="flow" id="authForm">
+          <div class="field-grid">
+            <label class="field">
+              <span>工号 / userid</span>
+              <input id="userid" name="userid" autocomplete="username" required placeholder="例如 10086" />
+            </label>
+            <label class="field">
+              <span>姓名 / username</span>
+              <input id="username" name="username" autocomplete="name" required placeholder="企业微信显示名" />
+            </label>
+          </div>
+
+          <div class="steps">
+            <article class="step" data-step="1">
+              <div class="step-index">01</div>
+              <div class="step-body">
+                <h3>申请密钥</h3>
+                <p>向 <span class="mono">finedo.cn:30982</span> 发送申请；运维通过企业微信下发 RSA 公钥。Mac 上会自动把 Wi‑Fi DNS 切到 <span class="mono">223.5.5.5</span>。</p>
+                <button type="button" class="btn secondary" id="btnApply">申请密钥</button>
+              </div>
+            </article>
+
+            <article class="step" data-step="2">
+              <div class="step-index">02</div>
+              <div class="step-body">
+                <h3>请求授权</h3>
+                <p>粘贴企业微信公钥，客户端用其加密 <span class="mono">sign</span> 后敲门（同样会先修正 Wi‑Fi DNS）。</p>
+                <label class="field key-field">
+                  <span>RSA 公钥</span>
+                  <textarea
+                    id="publicKey"
+                    name="publicKey"
+                    rows="6"
+                    placeholder="粘贴 -----BEGIN PUBLIC KEY----- … 或企业微信原文"
+                  ></textarea>
+                </label>
+                <div class="key-meta" id="keyMeta">尚未保存本地公钥</div>
+                <button type="button" class="btn primary" id="btnAuthorize">请求授权</button>
+              </div>
+            </article>
+          </div>
+        </form>
+      </section>
+
+      <section class="side-info">
+        <h2>运行状态</h2>
+        <p class="section-lead">已授权后后台静默续期；探测成功与否才是 UI 的唯一判据。</p>
+        <dl class="facts" id="facts">
+          <div><dt>Keep-alive</dt><dd id="factKeepalive">—</dd></div>
+          <div><dt>敲门间隔</dt><dd id="factKnock">—</dd></div>
+          <div><dt>密钥轮换</dt><dd id="factKey">—</dd></div>
+          <div><dt>最近敲门</dt><dd id="factLast">—</dd></div>
+        </dl>
+        <ul class="log" id="logList" aria-live="polite"></ul>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>FineNet Auth</span>
+      <span class="dot"></span>
+      <span>已授权 ≠ 登录令牌，仅表示 spacheck.json 返回 200</span>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
