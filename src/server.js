@@ -125,6 +125,12 @@ async function handleApi(req, res, pathname, client) {
     return json(res, 200, { ok: true, key: { userid: row.userid, updatedAt: row.updatedAt }, snapshot: client.snapshot() });
   }
 
+  if (pathname === "/api/apps" && method === "GET") {
+    const { listCompanyApps } = await import("./spa/apps.js");
+    const apps = await listCompanyApps();
+    return json(res, 200, { ok: true, ...apps, snapshot: client.snapshot() });
+  }
+
   if (pathname === "/api/dns-fix" && method === "POST") {
     const result = await client.fixWifiDns("api");
     return json(res, 200, { ok: Boolean(result.ok !== false), result, snapshot: client.snapshot() });

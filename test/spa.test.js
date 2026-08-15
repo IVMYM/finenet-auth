@@ -128,8 +128,9 @@ describe("dns-fix", () => {
     assert.ok(back);
   });
 
-  it("exposes verifyDnsResolution", async () => {
-    const { verifyDnsResolution } = await import("../src/spa/dns-fix.js");
-    assert.equal(typeof verifyDnsResolution, "function");
+  it("exposes company apps catalog", async () => {
+    const { COMPANY_APPS } = await import("../src/spa/apps-catalog.js");
+    assert.ok(COMPANY_APPS.some((a) => a.id === "git"));
+    assert.ok(COMPANY_APPS.some((a) => a.id === "k8s"));
   });
 });

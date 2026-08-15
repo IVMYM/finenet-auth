@@ -20,6 +20,7 @@ Usage:
   finenet-auth                      Start local UI (default :3927)
   finenet-auth status               Probe 已授权 / 未授权
   finenet-auth diagnose             Check spacheck / app / git (解释 403)
+  finenet-auth apps                 List company apps reachable after SPA
   finenet-auth set-profile --user ID --name NAME
   finenet-auth set-key [--key PEM]  Save WeCom public key (or stdin)
   finenet-auth apply                Send 申请密钥 (identification=0)
@@ -84,12 +85,35 @@ async function main() {
       console.log(
         `- udp       ${diag.udp.host}:${diag.udp.port}  sent=${diag.udp.sent}  ${diag.udp.hint || diag.udp.error || ""}`
       );
-    }    if (diag.advice?.length) {
+    }
+    if (diag.advice?.length) {
       console.log("\n建议:");
       for (const line of diag.advice) console.log(`  • ${line}`);
     }
     console.log("\n" + JSON.stringify(diag, null, 2));
     process.exit(diag.authorized ? 0 : 2);
+  }
+
+  if (cmd === "apps") {
+    const { listCompanyApps } = await import("../src/spa/apps.js");
+    const report = await listCompanyApps();
+    console.log(report.spaAuthorized ? "SPA: 已授权" : "SPA: 未授权");
+    console.log(report.note);
+    console.log("");
+    for (const a of report.apps) {
+      console.log(
+        `${a.reachable ? "✓" : "✗"} ${(a.name || a.id).padEnd(16)} HTTP ${a.httpStatus || "—"}  dns=${a.dns || "—"}  ${a.label}${a.note ? "  — " + a.note : ""}`
+      );
+    }
+    if (report.advice?.length) {
+      console.log("\n建议:");
+      for (const line of report.advice) console.log(`  • ${line}`);
+    }
+    if (report.catalog) {
+      console.log("\n服务端目录探测:", report.catalog.url, "HTTP", report.catalog.httpStatus);
+    }
+    console.log("\n" + JSON.stringify(report, null, 2));
+    process.exit(report.spaAuthorized ? 0 : 2);
   }
 
   if (cmd === "set-profile") {

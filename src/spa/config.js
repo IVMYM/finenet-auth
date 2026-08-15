@@ -13,6 +13,8 @@ export const DEFAULTS = {
     { name: "app", url: "https://app.finedo.cn/", expectOk: true },
     { name: "git", url: "https://git.finedo.cn/", expectOk: true },
     { name: "harbor", url: "https://harbor.finedo.cn/", expectOk: true },
+    { name: "k8s", url: "https://k8s.finedo.cn/", expectOk: true },
+    { name: "vpn", url: "https://vpn.finedo.cn/", expectOk: true },
   ],
   /** UI-facing whitelist TTL (~20 min) */
   authValidMs: 1_200_000,
