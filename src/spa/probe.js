@@ -265,20 +265,20 @@ export async function diagnoseHosts({
     const fakeOnService = service403.some((h) => h.fakeIp || isFakeIp(h.dns));
     if (fakeOnService) {
       advice.unshift(
-        "矛盾现象：spacheck 已通过，但 git/harbor 的 DNS 仍是 198.18.*（Clash fake-IP）。403 来自本地代理，不是公司 Git/Harbor。"
+        "矛盾现象：spacheck 已通过，但 git/harbor 的 DNS 仍是 198.18.*（小火箭/Clash fake-IP）。403 来自本地代理，不是公司 Git/Harbor。"
       );
       advice.push(
-        "处理：对 *.finedo.cn 全部 DIRECT，或 finenet-auth dns-fix / bash scripts/fix-mac-dns.sh；确认 dig +short git.finedo.cn 变为公网 IP（如 120.210.x.x）后再访问。"
+        "处理：bash scripts/disconnect-proxy-tun.sh（断开 Shadowrocket VPN）；「直连」不够。确认 dig +short git.finedo.cn 变为公网后再访问。"
       );
     } else {
       advice.push(
-        `SPA(spacheck) 已通过，但 ${service403.map((h) => h.name).join("/")} 仍 403：可能是分服务白名单，或 Git/Harbor 应用层未登录。`
+        `SPA(spacheck/app) 已通过，但 ${service403.map((h) => h.name).join("/")} 仍是 nginx 403：边缘网关按 Host/SNI 拒绝，多半是分服务白名单未包含 git/harbor。`
       );
       advice.push(
-        "对比：curl -sI https://app.finedo.cn/ 与 git/harbor；若 app 正常而 git/harbor 403，优先找运维确认 SPA 策略是否包含这两台。"
+        "不是改 hosts、一般也不用先登堡垒。请运维确认工号对 git.finedo.cn / harbor.finedo.cn 的 SPA 策略；或用官方 FinedoIT 客户端对比。"
       );
       advice.push(
-        "Harbor/Git 浏览器无 Cookie 时也可能 401/403；能打开登录页或返回 302→login 通常算网络已通。"
+        "若官方客户端能开 git 而本工具不能，敲门字段可能缺服务列表，需对照官方包体。"
       );
     }
   } else if (authorized) {
