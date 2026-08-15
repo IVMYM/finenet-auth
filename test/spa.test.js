@@ -127,4 +127,9 @@ describe("dns-fix", () => {
     const back = await restoreWifiDns();
     assert.ok(back);
   });
+
+  it("exposes verifyDnsResolution", async () => {
+    const { verifyDnsResolution } = await import("../src/spa/dns-fix.js");
+    assert.equal(typeof verifyDnsResolution, "function");
+  });
 });

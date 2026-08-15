@@ -225,7 +225,12 @@ export class SpaClient extends EventEmitter {
         publicDns: this.config.publicDns,
       });
       this.lastDnsFix = { at: Date.now(), reason, ...result };
-      if (!result.skipped) {
+      if (result.ok === false) {
+        this._log("warn", result.error || "DNS 仍被 TUN/fake-IP 劫持", {
+          reason: result.reason,
+          verify: result.verify?.rows,
+        });
+      } else if (!result.skipped) {
         this._log("info", "已切换 Wi-Fi DNS 为公共解析", {
           service: result.service,
           after: result.after?.servers,

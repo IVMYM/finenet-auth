@@ -24,7 +24,8 @@ Usage:
   finenet-auth set-key [--key PEM]  Save WeCom public key (or stdin)
   finenet-auth apply                Send 申请密钥 (identification=0)
   finenet-auth authorize            Send 请求授权 knock
-  finenet-auth dns-fix             Set Wi-Fi DNS to public (macOS)
+  finenet-auth dns-fix             Set Wi-Fi DNS to public (macOS) + verify
+  finenet-auth dns-check            Detect TUN/fake-IP hijack vs public dig
   finenet-auth dns-restore          Restore previous Wi-Fi DNS
   finenet-auth serve [--port N]     Same as default start
 `);
@@ -154,7 +155,22 @@ async function main() {
   if (cmd === "dns-fix") {
     const result = await client.fixWifiDns("cli");
     console.log(JSON.stringify(result, null, 2));
+    if (result.advice?.length) {
+      console.log("\n建议:");
+      for (const line of result.advice) console.log(`  • ${line}`);
+    }
     process.exit(result.ok === false ? 1 : 0);
+  }
+
+  if (cmd === "dns-check") {
+    const { verifyDnsResolution } = await import("../src/spa/dns-fix.js");
+    const result = await verifyDnsResolution();
+    console.log(JSON.stringify(result, null, 2));
+    if (result.advice?.length) {
+      console.log("\n建议:");
+      for (const line of result.advice) console.log(`  • ${line}`);
+    }
+    process.exit(result.hijacked ? 1 : 0);
   }
 
   if (cmd === "dns-restore") {
