@@ -262,11 +262,25 @@ export async function diagnoseHosts({
       );
     }
   } else if (service403.length) {
-    advice.push(
-      `SPA(spacheck) 已通过，但 ${service403.map((h) => h.name).join("/")} 仍 403：可能是分服务白名单，或 Git/Harbor 应用层未登录。`
-    );
-    advice.push("对比：curl -sI https://app.finedo.cn/ 与 git/harbor；若 app 正常而 git/harbor 403，优先找运维确认 SPA 策略是否包含这两台。");
-    advice.push("Harbor/Git 浏览器无 Cookie 时也可能 401/403；能打开登录页或返回 302→login 通常算网络已通。");
+    const fakeOnService = service403.some((h) => h.fakeIp || isFakeIp(h.dns));
+    if (fakeOnService) {
+      advice.unshift(
+        "矛盾现象：spacheck 已通过，但 git/harbor 的 DNS 仍是 198.18.*（Clash fake-IP）。403 来自本地代理，不是公司 Git/Harbor。"
+      );
+      advice.push(
+        "处理：对 *.finedo.cn 全部 DIRECT，或 finenet-auth dns-fix / bash scripts/fix-mac-dns.sh；确认 dig +short git.finedo.cn 变为公网 IP（如 120.210.x.x）后再访问。"
+      );
+    } else {
+      advice.push(
+        `SPA(spacheck) 已通过，但 ${service403.map((h) => h.name).join("/")} 仍 403：可能是分服务白名单，或 Git/Harbor 应用层未登录。`
+      );
+      advice.push(
+        "对比：curl -sI https://app.finedo.cn/ 与 git/harbor；若 app 正常而 git/harbor 403，优先找运维确认 SPA 策略是否包含这两台。"
+      );
+      advice.push(
+        "Harbor/Git 浏览器无 Cookie 时也可能 401/403；能打开登录页或返回 302→login 通常算网络已通。"
+      );
+    }
   } else if (authorized) {
     advice.push("SPA 已放行。若个别页面仍异常，多半是应用层权限，而非网络授权。");
   }
