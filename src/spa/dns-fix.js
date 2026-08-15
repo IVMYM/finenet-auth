@@ -108,8 +108,8 @@ async function listProxyProcesses() {
     const { stdout } = await run("ps", ["aux"]);
     return stdout
       .split("\n")
-      .filter((l) => /clash|surge|mihomo|quantumult|v2ray|xray|sing-box/i.test(l))
-      .filter((l) => !/grep|egrep|fix-mac-dns|dns-fix/i.test(l))
+      .filter((l) => /clash|surge|mihomo|quantumult|shadowrocket|karing|v2ray|xray|sing-box|MacPacketTunnel/i.test(l))
+      .filter((l) => !/grep|egrep|fix-mac-dns|dns-fix|disconnect-proxy/i.test(l))
       .map((l) => l.trim())
       .slice(0, 8);
   } catch {
@@ -117,9 +117,23 @@ async function listProxyProcesses() {
   }
 }
 
+async function listConnectedVpns() {
+  if (platform() !== "darwin") return [];
+  try {
+    const { stdout } = await run("scutil", ["--nc", "list"]);
+    return stdout
+      .split("\n")
+      .filter((l) => /\(Connected\)/i.test(l))
+      .map((l) => l.trim())
+      .slice(0, 10);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Compare system dig vs dig @public. Fake-IP on system while public is real
- * ⇒ Clash/Surge TUN / enhanced-mode DNS hijack (Wi-Fi DNS 设置无效).
+ * ⇒ Shadowrocket/Clash TUN DNS hijack (Wi-Fi DNS 设置无效；「直连」也不够).
  */
 export async function verifyDnsResolution(hosts = VERIFY_HOSTS) {
   const rows = [];
@@ -137,18 +151,26 @@ export async function verifyDnsResolution(hosts = VERIFY_HOSTS) {
   }
   const hijacked = rows.some((r) => r.hijacked || r.systemFakeIp);
   const proxyProcesses = await listProxyProcesses();
+  const connectedVpns = await listConnectedVpns();
+  const advice = [];
+  if (hijacked) {
+    advice.push(
+      "Wi-Fi DNS 即使已是 223.5.5.5，系统 dig 仍返回 198.18.* → 本机 VPN/TUN（小火箭 Shadowrocket / Clash 等）在劫持 DNS。「规则直连」不会关掉隧道。"
+    );
+    advice.push("处理：bash scripts/disconnect-proxy-tun.sh  或 系统设置→VPN 断开 Shadowrocket；小火箭里关掉连接开关（不是只选直连）。");
+    advice.push(
+      "验证：dig +short git.finedo.cn 必须等于 dig @223.5.5.5 +short git.finedo.cn（不能再是 198.18.*）。"
+    );
+    if (connectedVpns.length) {
+      advice.push(`当前仍 Connected 的 VPN: ${connectedVpns.join(" | ")}`);
+    }
+  }
   return {
     hijacked,
     rows,
     proxyProcesses,
-    advice: hijacked
-      ? [
-          "Wi-Fi DNS 即使已是 223.5.5.5，系统 dig 仍返回 198.18.* → Clash/Surge **TUN/增强模式**在网卡层劫持 DNS，改系统 DNS 无效。",
-          "处理：菜单栏对 Clash/Surge 选 Quit（彻底退出）；关闭 TUN / 增强模式 / fake-IP；活动监视器结束残留进程。",
-          "验证：dig @223.5.5.5 +short git.finedo.cn 应为公网；dig +short git.finedo.cn 必须与之一致（不能再是 198.18.*）。",
-          "Clash 规则兜底：DOMAIN-SUFFIX,finedo.cn,DIRECT，并对 fake-ip-filter 加入 +.finedo.cn",
-        ]
-      : [],
+    connectedVpns,
+    advice,
   };
 }
 

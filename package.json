@@ -14,6 +14,7 @@
     "install:local": "bash scripts/install-local.sh --no-start",
     "install:service": "bash scripts/install-local.sh --service --no-start",
     "install:mac": "bash scripts/install-mac.sh",
+    "disconnect:tun": "bash scripts/disconnect-proxy-tun.sh",
     "uninstall:local": "bash scripts/uninstall-local.sh"
   },
   "engines": {
